@@ -1,0 +1,75 @@
+name: MIM XHYN GTA5 A710
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 python3-pip python3-mako \
+            meson ninja-build flex bison \
+            pkg-config zip unzip
+
+      - name: Setup Android NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-34" "ndk;27.2.12479018"
+
+      - name: Build MIM Turnip
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.2.12479018
+        run: |
+          git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git mesa
+
+          cat > a710-cross.txt <<EOF
+          [binaries]
+          c = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang'
+          cpp = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang++'
+          ar = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
+          strip = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
+
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'armv8'
+          endian = 'little'
+          EOF
+
+          meson setup build mesa \
+            --cross-file a710-cross.txt \
+            --buildtype=release \
+            -Dplatforms=android \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=kgsl \
+            -Dgallium-drivers= \
+            -Degl=disabled \
+            -Dbuild-tests=false
+
+          meson compile -C build
+
+          mkdir -p package/lib
+          find build -name 'libvulkan_freedreno.so' \
+            -exec cp {} package/lib/ \;
+
+          echo "=== DRIVER ==="
+          ls -lh package/lib/
+
+          cd package
+          zip -r ../MIM-XHYN-GTA5-A710.zip .
+
+      - name: Upload driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIM-XHYN-GTA5-A710
+          path: MIM-XHYN-GTA5-A710.zip
