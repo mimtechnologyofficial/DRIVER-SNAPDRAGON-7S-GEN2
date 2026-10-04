@@ -1,4 +1,4 @@
-name: MIM XHYN GTA5 A710
+name: MIM A710 EXTREME
 
 on:
   workflow_dispatch:
@@ -14,38 +14,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            git curl unzip zip build-essential flex bison \
-            glslang-tools ninja-build pkg-config python3-pip
-          sudo python3 -m pip install --quiet --break-system-packages \
+          sudo apt-get install -y \
+            git curl unzip zip \
+            build-essential flex bison \
+            python3 python3-pip \
+            ninja-build pkg-config \
+            glslang-tools
+
+          python3 -m pip install --user \
             meson mako packaging pyyaml
 
-      - name: Get A710 source
+      - name: Clone A710 source
         run: |
-          git clone --depth=1 https://github.com/Vauzi-17/710.git a710
+          git clone --depth=1 \
+            https://github.com/Vauzi-17/710.git \
+            a710
 
       - name: Build MIM A710
         working-directory: a710
         env:
-          BUILD_VERSION: "1.0"
+          BUILD_VERSION: "MIM-A710-EXTREME-1"
           BUILD_TARGET: android
           BUILD_VARIANTS: base
           MESA_REF: main
-          NDK_VERSION: android-ndk-r29
-          ANDROID_NDK_HOME: ""
-          DRIVER_NAME: "MIM XHYN GTA5 A710"
-          DRIVER_DESCRIPTION: "MIM Turnip for Snapdragon 7s Gen 2 / Adreno 710"
+          DRIVER_NAME: "MIM XHYN GTA5 A710 EXTREME"
+          DRIVER_DESCRIPTION: "MIM A710 Snapdragon 7s Gen 2"
           DRIVER_AUTHOR: "MIM Technology"
-          ZIP_PREFIX: "MIM-XHYN-GTA5-A710"
+          ZIP_PREFIX: "MIM-XHYN-GTA5-A710-EXTREME"
         run: |
-          bash ./turnip_builder.sh 2>&1 | tee build.log
+          chmod +x turnip_builder.sh
+          bash turnip_builder.sh 2>&1 | tee build.log
 
-      - name: Upload driver
-        if: success()
+      - name: Verify output
+        run: |
+          echo "=== BUILD OUTPUT ==="
+          find a710/out -type f -maxdepth 2 -print
+          echo "=== DRIVER CHECK ==="
+          find a710/out -name "*.zip" -exec unzip -l {} \;
+
+      - name: Upload MIM driver
         uses: actions/upload-artifact@v4
         with:
-          name: MIM-XHYN-GTA5-A710
+          name: MIM-XHYN-GTA5-A710-EXTREME
           path: a710/out/*.zip
