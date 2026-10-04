@@ -3,73 +3,49 @@ name: MIM XHYN GTA5 A710
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git python3 python3-pip python3-mako \
-            meson ninja-build flex bison \
-            pkg-config zip unzip
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            git curl unzip zip build-essential flex bison \
+            glslang-tools ninja-build pkg-config python3-pip
+          sudo python3 -m pip install --quiet --break-system-packages \
+            meson mako packaging pyyaml
 
-      - name: Setup Android NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install NDK
+      - name: Get A710 source
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "ndk;27.2.12479018"
+          git clone --depth=1 https://github.com/Vauzi-17/710.git a710
 
-      - name: Build MIM Turnip
+      - name: Build MIM A710
+        working-directory: a710
         env:
-          ANDROID_NDK: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.2.12479018
+          BUILD_VERSION: "1.0"
+          BUILD_TARGET: android
+          BUILD_VARIANTS: base
+          MESA_REF: main
+          NDK_VERSION: android-ndk-r29
+          ANDROID_NDK_HOME: ""
+          DRIVER_NAME: "MIM XHYN GTA5 A710"
+          DRIVER_DESCRIPTION: "MIM Turnip for Snapdragon 7s Gen 2 / Adreno 710"
+          DRIVER_AUTHOR: "MIM Technology"
+          ZIP_PREFIX: "MIM-XHYN-GTA5-A710"
         run: |
-          git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git mesa
-
-          cat > a710-cross.txt <<EOF
-          [binaries]
-          c = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang'
-          cpp = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang++'
-          ar = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
-          strip = '$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
-
-          [host_machine]
-          system = 'android'
-          cpu_family = 'aarch64'
-          cpu = 'armv8'
-          endian = 'little'
-          EOF
-
-          meson setup build mesa \
-            --cross-file a710-cross.txt \
-            --buildtype=release \
-            -Dplatforms=android \
-            -Dvulkan-drivers=freedreno \
-            -Dfreedreno-kmds=kgsl \
-            -Dgallium-drivers= \
-            -Degl=disabled \
-            -Dbuild-tests=false
-
-          meson compile -C build
-
-          mkdir -p package/lib
-          find build -name 'libvulkan_freedreno.so' \
-            -exec cp {} package/lib/ \;
-
-          echo "=== DRIVER ==="
-          ls -lh package/lib/
-
-          cd package
-          zip -r ../MIM-XHYN-GTA5-A710.zip .
+          bash ./turnip_builder.sh 2>&1 | tee build.log
 
       - name: Upload driver
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MIM-XHYN-GTA5-A710
-          path: MIM-XHYN-GTA5-A710.zip
+          path: a710/out/*.zip
